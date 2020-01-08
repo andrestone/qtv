@@ -597,6 +597,8 @@ void HTTPSV_GenerateDemoListing(cluster_t *cluster, oproxy_t *dest)
 	char link[1024],
 		name[sizeof(cluster->availdemos[0].name) * 5],
 		href[sizeof(cluster->availdemos[0].name) * 5];
+	char stats_link[1024];
+	char stats_href[1024];
 	char *s;
 
 	dest->_bufferautoadjustmaxsize_ = 1024 * 1024; // NOTE: this allow 1MB buffer...
@@ -609,7 +611,8 @@ void HTTPSV_GenerateDemoListing(cluster_t *cluster, oproxy_t *dest)
 
 	s = "    <table id='demos' cellspacing='0'>\n      <thead>\n        <tr>\n"
 		"          <th class='stream'>stream</th>\n"
-		"          <th class='save'>Download</th>\n"
+		"          <th class='save'>MVD</th>\n"
+		"          <th class='save'>STATS</th>\n"
 		"          <th class='name'>Demoname</th>\n"
 		"          <th class='size'>Size</th>\n        </tr>\n      </thead>\n      <tbody>\n";
 	Net_ProxySend(cluster, dest, s, strlen(s));
@@ -631,12 +634,17 @@ void HTTPSV_GenerateDemoListing(cluster_t *cluster, oproxy_t *dest)
 				href);
 			Net_ProxySend(cluster, dest, link, strlen(link));
 		}
-		
+
+		strlcpy(stats_link, href, sizeof(stats_link));
+		stats_link[strlen(stats_link)-4] = '\0';
+		snprintf(stats_href, sizeof(stats_href), "%s.txt", stats_link);
+
 		snprintf(link, sizeof(link), "</td>\n"
+			"          <td class='save'><a href='/dl/demos/%s'><img src='/save.png' width='16' height='16' /></a></td>\n"
 			"          <td class='save'><a href='/dl/demos/%s'><img src='/save.png' width='16' height='16' /></a></td>\n"
 			"          <td class='name'>%s</td><td class='size'>%i kB</td>\n"
 			"        </tr>\n",
-			href, name, cluster->availdemos[i].size/1024);
+			href, stats_href, name, cluster->availdemos[i].size/1024);
 		Net_ProxySend(cluster, dest, link, strlen(link));
 	}
 	s = "      </tbody>\n    </table>\n";
@@ -713,6 +721,7 @@ void HTTPSV_GenerateDemoDownload(cluster_t *cluster, oproxy_t *dest, char *name)
 {
 	char pathname[256];
 	char unescaped_name[1024];
+	char *mime_type;
 	qbool valid;
 	int ext, size;
 
@@ -729,9 +738,14 @@ void HTTPSV_GenerateDemoDownload(cluster_t *cluster, oproxy_t *dest, char *name)
 		if (stricmp(demos_allowed_ext[ext], FS_FileExtension(pathname)) == 0)
 		{
 			valid = true;
+			mime_type = "application/octet-stream";
 		}
 	}
-
+	if (stricmp(FS_FileExtension(pathname), ".txt") == 0 || stricmp(FS_FileExtension(pathname), ".json") == 0 )
+	{
+		valid = true;
+		mime_type = "application/json";
+  }
 	if (!valid)
 	{
 		HTTPSV_GenerateNotFoundError(cluster, dest);
@@ -745,7 +759,7 @@ void HTTPSV_GenerateDemoDownload(cluster_t *cluster, oproxy_t *dest, char *name)
 		return;
 	}
 
-	HTTPSV_SendHTTPHeader(cluster, dest, "200", "application/octet-stream", false);
+	HTTPSV_SendHTTPHeader(cluster, dest, "200", mime_type, false);
 }
 
 //========================================================================
